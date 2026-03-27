@@ -1,0 +1,12 @@
+.env
+.venv/
+data/
+uploads/
+__pycache__/
+*.pyc
+*.png
+*.pdf
+*.json
+*.txt
+**/temp_images/
+/scripts
