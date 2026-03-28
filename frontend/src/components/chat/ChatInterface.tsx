@@ -80,31 +80,39 @@ export const ChatInterface: React.FC = () => {
       const decoder = new TextDecoder();
       
       let assistantContent = '';
+      let buffer = '';
 
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
         
-        const chunk = decoder.decode(value);
-        const lines = chunk.split('\n');
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        
+        // Keep the last incomplete line in the buffer
+        buffer = lines.pop() || '';
         
         for (const line of lines) {
           if (line.startsWith('data: ')) {
-            const data = JSON.parse(line.slice(6));
-            const nodeName = Object.keys(data)[0];
-            const updates = data[nodeName];
-            
-            setReasoningSteps(prev => [...prev, { node: nodeName, update: updates }]);
-            
-            if (nodeName === 'synthesizer' && updates.final_answer) {
-              assistantContent = updates.final_answer;
-              setMessages(prev => {
-                 const last = prev[prev.length - 1];
-                 if (last?.role === 'assistant') {
-                    return [...prev.slice(0, -1), { role: 'assistant', content: assistantContent }];
-                 }
-                 return [...prev, { role: 'assistant', content: assistantContent }];
-              });
+            try {
+              const data = JSON.parse(line.slice(6));
+              const nodeName = Object.keys(data)[0];
+              const updates = data[nodeName];
+              
+              setReasoningSteps(prev => [...prev, { node: nodeName, update: updates }]);
+              
+              if (nodeName === 'synthesizer' && updates.final_answer) {
+                assistantContent = updates.final_answer;
+                setMessages(prev => {
+                   const last = prev[prev.length - 1];
+                   if (last?.role === 'assistant') {
+                      return [...prev.slice(0, -1), { role: 'assistant', content: assistantContent }];
+                   }
+                   return [...prev, { role: 'assistant', content: assistantContent }];
+                });
+              }
+            } catch (pErr) {
+              console.error("JSON Error resolving chunk:", pErr, line);
             }
           }
         }

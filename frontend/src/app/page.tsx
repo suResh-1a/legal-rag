@@ -46,7 +46,9 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState('verify');
   const [pendingSections, setPendingSections] = useState<any[]>([]);
   const [selectedSection, setSelectedSection] = useState<any>(null);
-  const [reasoningSteps, setReasoningSteps] = useState<any[]>([]);
+  
+  const [sidebarMode, setSidebarMode] = useState<'dafa' | 'page'>('dafa');
+  const [selectedPage, setSelectedPage] = useState<number | null>(null);
 
   useEffect(() => {
     if (activeTab === 'verify') {
@@ -54,12 +56,22 @@ export default function Home() {
         .then(res => res.json())
         .then(data => {
           setPendingSections(data);
-          if (data.length > 0 && !selectedSection) {
-            setSelectedSection(data[0]);
+          if (data.length > 0) {
+            if (!selectedSection) setSelectedSection(data[0]);
+            setSelectedPage(prev => prev === null ? data[0].page_num : prev);
           }
         });
     }
   }, [activeTab]);
+
+  const pages = React.useMemo(() => {
+    const grouped = new Map<number, any[]>();
+    pendingSections.forEach(s => {
+      if(!grouped.has(s.page_num)) grouped.set(s.page_num, []);
+      grouped.get(s.page_num)!.push(s);
+    });
+    return Array.from(grouped.entries()).sort((a,b) => a[0] - b[0]);
+  }, [pendingSections]);
 
   const handleVerify = async (data: any) => {
     try {
@@ -70,7 +82,9 @@ export default function Home() {
       });
       if (res.ok) {
         setPendingSections(prev => prev.filter(s => s._id !== data.mongo_id));
-        setSelectedSection(null);
+        if (sidebarMode === 'dafa') {
+           setSelectedSection(null);
+        }
         alert("Section verified successfully!");
       }
     } catch (err) {
@@ -85,26 +99,79 @@ export default function Home() {
       <div className="flex-1">
         {activeTab === 'verify' ? (
           <div className="flex h-full">
-            <div className="w-1/4 h-[calc(100vh-64px)] overflow-auto border-r border-white/10 p-4 space-y-2">
-               <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-4">Pending ( {pendingSections.length} )</h3>
-               {pendingSections.map(s => (
-                 <button 
-                  key={s._id}
-                  onClick={() => setSelectedSection(s)}
-                  className={`w-full text-left p-3 rounded-lg transition-all border ${selectedSection?._id === s._id ? 'bg-blue-600/10 border-blue-500/40' : 'bg-white/5 border-transparent hover:border-white/10'}`}
-                 >
-                   <p className="text-sm font-bold truncate">Dafa {s.dafa_no}</p>
-                   <p className="text-[10px] text-gray-500 truncate">{s.act_name}</p>
-                 </button>
-               ))}
+            <div className="w-[260px] flex-shrink-0 h-[calc(100vh-64px)] overflow-auto border-r border-white/10 p-4 flex flex-col gap-2">
+               <div className="flex gap-2 mb-2">
+                  <button 
+                     onClick={() => setSidebarMode('dafa')} 
+                     className={`flex-1 text-xs py-1.5 rounded-md transition-colors ${sidebarMode === 'dafa' ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}
+                  >
+                     Dafa Wise
+                  </button>
+                  <button 
+                     onClick={() => setSidebarMode('page')} 
+                     className={`flex-1 text-xs py-1.5 rounded-md transition-colors ${sidebarMode === 'page' ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}
+                  >
+                     Page Wise
+                  </button>
+               </div>
+               
+               <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-widest mt-2 mb-2">
+                 Pending ( {sidebarMode === 'dafa' ? pendingSections.length : pages.length} )
+               </h3>
+               
+               <div className="flex-1 overflow-auto space-y-2 pr-2">
+                 {sidebarMode === 'dafa' ? (
+                   pendingSections.map(s => (
+                     <button 
+                      key={s._id}
+                      onClick={() => setSelectedSection(s)}
+                      className={`w-full text-left p-3 rounded-lg transition-all border ${selectedSection?._id === s._id ? 'bg-blue-600/10 border-blue-500/40' : 'bg-white/5 border-transparent hover:border-white/10'}`}
+                     >
+                       <p className="text-sm font-bold truncate">Dafa {s.dafa_no}</p>
+                       <p className="text-[10px] text-gray-500 truncate">{s.act_name}</p>
+                     </button>
+                   ))
+                 ) : (
+                   pages.map(([pageNum, sections]) => (
+                     <button 
+                      key={pageNum}
+                      onClick={() => setSelectedPage(pageNum)}
+                      className={`w-full text-left p-3 rounded-lg transition-all border ${selectedPage === pageNum ? 'bg-blue-600/10 border-blue-500/40' : 'bg-white/5 border-transparent hover:border-white/10'}`}
+                     >
+                       <p className="text-sm font-bold truncate">Page {pageNum}</p>
+                       <p className="text-[10px] text-gray-500 truncate">{sections.length} items to verify</p>
+                     </button>
+                   ))
+                 )}
+               </div>
             </div>
+            
             <div className="flex-1">
-              <SplitView 
-                left={<PdfViewer src={selectedSection?.source_image_path || ""} />}
-                right={<EditorForm section={selectedSection} onVerify={handleVerify} />}
-              />
+              {sidebarMode === 'dafa' ? (
+                <SplitView 
+                  left={<PdfViewer src={selectedSection?.source_image_path || ""} />}
+                  right={<EditorForm section={selectedSection} onVerify={handleVerify} />}
+                />
+              ) : (
+                <SplitView 
+                  left={<PdfViewer src={pages.find(p => p[0] === selectedPage)?.[1][0]?.source_image_path || ""} />}
+                  right={
+                    <div className="space-y-6 pb-20">
+                      {pages.find(p => p[0] === selectedPage)?.[1].map((s: any) => (
+                        <div key={s._id} className="bg-black/20 rounded-xl border border-white/5 shadow-sm p-2">
+                           <EditorForm section={s} onVerify={handleVerify} />
+                        </div>
+                      ))}
+                      {(!pages.find(p => p[0] === selectedPage)?.[1] || pages.find(p => p[0] === selectedPage)?.[1].length === 0) && (
+                        <div className="h-full flex items-center justify-center text-gray-500 mt-20">Select a page to verify</div>
+                      )}
+                    </div>
+                  }
+                />
+              )}
             </div>
-            <div className="w-1/5 h-[calc(100vh-64px)]">
+            
+            <div className="w-[240px] flex-shrink-0 h-[calc(100vh-64px)]">
               <SymbolLegend />
             </div>
           </div>
@@ -112,13 +179,6 @@ export default function Home() {
           <div className="flex h-full">
              <div className="flex-1 h-[calc(100vh-64px)] p-6">
                 <ChatInterface />
-             </div>
-             <div className="w-1/4 h-[calc(100vh-64px)]">
-                {/* Reasoning Trace should be dynamic based on ChatInterface state. 
-                   For simplicity in this demo, let's assume it's integrated or passed via context.
-                   Actually, let's just make ChatInterface handle its own local reasoning state for now.
-                */}
-                <ReasoningTrace steps={[]} /> {/* This will be empty until shared state is added, but UI is ready */}
              </div>
           </div>
         )}

@@ -39,7 +39,26 @@ Output must be a strictly typed JSON list of objects:
 """
         user_prompt = f"Analyze Page {page_num} of the provided legal document scan."
         
-        response = self.model.generate_content([system_prompt, user_prompt, img])
+        import time
+        from google.api_core import exceptions
+        
+        max_retries = 5
+        base_delay = 5 # Start with 5 seconds for 429
+        
+        for attempt in range(max_retries):
+            try:
+                response = self.model.generate_content([system_prompt, user_prompt, img])
+                break # Success
+            except exceptions.ResourceExhausted as e:
+                if attempt == max_retries - 1:
+                    print(f"Max retries exceeded for page {page_num}: {e}")
+                    raise e
+                delay = base_delay * (2 ** attempt)
+                print(f"429 Resource Exhausted for page {page_num}. Retrying in {delay}s... (Attempt {attempt+1}/{max_retries})")
+                time.sleep(delay)
+            except Exception as e:
+                print(f"Unexpected error for page {page_num}: {e}")
+                raise e
         
         # Extract JSON from response
         try:

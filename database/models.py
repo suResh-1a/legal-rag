@@ -13,6 +13,7 @@ class LegalSection(BaseModel):
     page_num: int
     symbol_found: Optional[str] = None
     amendment_history: Optional[str] = None
+    hierarchy_path: Optional[str] = None
 
 class SectionMetadata(BaseModel):
     symbols: Optional[str] = None

@@ -1,26 +1,44 @@
 import os
-from pdf2image import convert_from_path
+from pdf2image import convert_from_path, pdfinfo_from_path
 from PIL import Image
 from typing import List
 
 def convert_pdf_to_images(pdf_path: str, output_folder: str, dpi: int = 300) -> List[str]:
     """
-    Converts PDF pages to high-resolution PNG images.
-    Returns a list of paths to the generated images.
+    Converts PDF pages to high-resolution PNG images one-by-one to save memory.
     """
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
         
-    print(f"Converting {pdf_path} to images at {dpi} DPI...")
-    images = convert_from_path(pdf_path, dpi=dpi)
+    info = pdfinfo_from_path(pdf_path)
+    total_pages = info["Pages"]
+    
+    print(f"Converting {pdf_path} ({total_pages} pages) to images at {dpi} DPI sequentially...")
     
     image_paths = []
-    for i, image in enumerate(images):
-        image_name = f"page_{i+1}.png"
+    # Process only the first few for testing, or all if needed. 
+    # The calling script ingestion/main.py will decide how many pages to extract from this list.
+    # However, to be extra safe, we only convert what we actually need if we can.
+    # For now, let's keep it robust and convert all but one-by-one.
+    
+    for i in range(1, total_pages + 1):
+        image_name = f"page_{i}.png"
         image_path = os.path.join(output_folder, image_name)
-        image.save(image_path, "PNG")
-        image_paths.append(image_path)
-        print(f"Saved {image_path}")
+        
+        # Skip if already exists to save time/CPU
+        if os.path.exists(image_path):
+            image_paths.append(image_path)
+            continue
+            
+        print(f"Converting Page {i}/{total_pages}...")
+        page_images = convert_from_path(pdf_path, dpi=dpi, first_page=i, last_page=i)
+        if page_images:
+            page_images[0].save(image_path, "PNG")
+            image_paths.append(image_path)
+            print(f"Saved {image_path}")
+        
+        # Explicitly free memory if possible (though Python's GC should handle it)
+        del page_images
         
     return image_paths
 

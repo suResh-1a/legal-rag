@@ -74,11 +74,22 @@ async def chat_stream(request: ChatRequest):
     """Stream LangGraph reasoning steps and final answer."""
     async def event_generator():
         inputs = {"question": request.question}
-        # graph.stream returns an iterator of events
-        for event in graph.stream(inputs):
-            # event is a dict like {'node_name': {state_updates}}
-            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
-            await asyncio.sleep(0.1) # Small delay for smoother UI streaming
+        try:
+            # graph.stream returns an iterator of events
+            for event in graph.stream(inputs):
+                # event is a dict like {'node_name': {state_updates}}
+                try:
+                    json_data = json.dumps(event, ensure_ascii=False)
+                    yield f"data: {json_data}\n\n"
+                except Exception as je:
+                    print(f"JSON ERROR in stream: {je}")
+                    yield f"data: {json.dumps({'error': 'JSON serialization error: ' + str(je)})}\n\n"
+                await asyncio.sleep(0.1) # Small delay for smoother UI streaming
+        except Exception as e:
+            print(f"GRAPH ERROR in stream: {e}")
+            import traceback
+            traceback.print_exc()
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
             
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
