@@ -15,6 +15,13 @@ class AgentState(TypedDict):
     retrieved_docs: List[Dict]
     reasoning_steps: List[str]
     final_answer: str
+    token_usage: dict
+
+def accumulate_tokens(res, current_usage):
+    if hasattr(res, "usage_metadata") and res.usage_metadata:
+        current_usage["prompt"] += res.usage_metadata.prompt_token_count
+        current_usage["completion"] += res.usage_metadata.candidates_token_count
+        current_usage["total"] += res.usage_metadata.total_token_count
 
 # Database and LLM Setup
 db_manager = DatabaseManager()
@@ -24,6 +31,7 @@ model = genai.GenerativeModel("gemini-2.0-flash") # Use 2.0 check
 # Node 1: Retriever
 def retriever_node(state: AgentState):
     question = state["question"]
+    token_usage = state.get("token_usage", {"prompt": 0, "completion": 0, "total": 0})
     embedding = db_manager.embedding_manager.get_embedding(question)
     
     import re
@@ -40,6 +48,7 @@ def retriever_node(state: AgentState):
         """
         try:
             res = model.generate_content(extract_prompt)
+            accumulate_tokens(res, token_usage)
             raw = res.text.strip()
             if raw.lower() == "none" or not raw:
                 return []
@@ -196,6 +205,7 @@ Snippets:
 {chr(10).join(snippet_summaries)}
 """
             rerank_response = model.generate_content(rerank_prompt)
+            accumulate_tokens(rerank_response, token_usage)
             raw_scores = rerank_response.text.strip()
             # Parse JSON from response
             import json as _json
@@ -213,7 +223,8 @@ Snippets:
 
     return {
         "retrieved_docs": all_docs,
-        "reasoning_steps": state.get("reasoning_steps", []) + [f"Advanced Hybrid Search completed. Targeted entities: {targets}. Total snippets after rerank: {len(all_docs)}."]
+        "reasoning_steps": state.get("reasoning_steps", []) + [f"Advanced Hybrid Search completed. Targeted entities: {targets}. Total snippets after rerank: {len(all_docs)}."],
+        "token_usage": token_usage
     }
 
 # Node 2: Legal Analyzer
@@ -262,6 +273,7 @@ def synthesizer_node(state: AgentState):
     question = state["question"]
     docs = state["retrieved_docs"]
     reasoning_steps = state["reasoning_steps"]
+    token_usage = state.get("token_usage", {"prompt": 0, "completion": 0, "total": 0})
     
     if not docs:
         return {"final_answer": "I cannot find the specific law, please consult a lawyer."}
@@ -299,10 +311,12 @@ Context:
 Answer in Nepali (UTF-8). Provide the final answer with clear citations for each point.
 """
     response = model.generate_content(prompt)
+    accumulate_tokens(response, token_usage)
     
     return {
         "final_answer": response.text,
-        "reasoning_steps": reasoning_steps + ["Stitched hierarchical fragments and enforced strict amendment reporting guardrails."]
+        "reasoning_steps": reasoning_steps + ["Stitched hierarchical fragments and enforced strict amendment reporting guardrails."],
+        "token_usage": token_usage
     }
 
 # Build Graph

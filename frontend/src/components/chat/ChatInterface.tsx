@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 interface Message {
   role: 'user' | 'assistant';
   content: string;
+  token_usage?: { prompt: number, completion: number, total: number };
 }
 
 interface ReasoningStep {
@@ -103,12 +104,13 @@ export const ChatInterface: React.FC = () => {
               
               if (nodeName === 'synthesizer' && updates.final_answer) {
                 assistantContent = updates.final_answer;
+                const tokenUsage = updates.token_usage;
                 setMessages(prev => {
                    const last = prev[prev.length - 1];
                    if (last?.role === 'assistant') {
-                      return [...prev.slice(0, -1), { role: 'assistant', content: assistantContent }];
+                      return [...prev.slice(0, -1), { role: 'assistant', content: assistantContent, token_usage: tokenUsage }];
                    }
-                   return [...prev, { role: 'assistant', content: assistantContent }];
+                   return [...prev, { role: 'assistant', content: assistantContent, token_usage: tokenUsage }];
                 });
               }
             } catch (pErr) {
@@ -132,8 +134,8 @@ export const ChatInterface: React.FC = () => {
         <div className="flex-1 overflow-auto p-6 space-y-6" ref={scrollRef}>
           {messages.map((m, i) => (
             <div key={i} className={cn(
-              "flex w-full animate-in fade-in duration-500",
-              m.role === 'user' ? "justify-end" : "justify-start"
+              "flex flex-col w-full animate-in fade-in duration-500",
+              m.role === 'user' ? "items-end" : "items-start"
             )}>
               <div className={cn(
                 "max-w-[80%] p-4 rounded-2xl shadow-xl flex gap-3",
@@ -149,6 +151,13 @@ export const ChatInterface: React.FC = () => {
                   {m.content}
                 </div>
               </div>
+              {m.role === 'assistant' && m.token_usage && (
+                <div className="text-[10px] text-gray-500 mt-2 px-2 flex items-center gap-1.5 opacity-70 border border-white/5 rounded-full px-3 py-1 bg-black/20">
+                   <div className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                   <span className="font-semibold text-gray-400">{m.token_usage.total} tokens</span> 
+                   ({m.token_usage.prompt} prompt, {m.token_usage.completion} completion)
+                </div>
+              )}
             </div>
           ))}
           {isTyping && (
