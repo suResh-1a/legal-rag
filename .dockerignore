@@ -1,0 +1,29 @@
+# Python ignore
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+ENV/
+.env
+
+# Project specific
+api.log
+uploads/
+extracted_data/
+data/
+nepali_test.png
+
+# Git
+.git
+.gitignore
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Frontend (handled separately)
+frontend/node_modules/
+frontend/.next/

@@ -4,8 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { Navbar, SplitView } from '@/components/layout/AppLayout';
 import { PdfViewer } from '@/components/verification/PdfViewer';
 import { EditorForm } from '@/components/verification/EditorForm';
-import { ChatInterface, ReasoningTrace } from '@/components/chat/ChatInterface';
-import { Info, Diamond, Star, Square, Plus } from 'lucide-react';
+import { ChatInterface } from '@/components/chat/ChatInterface';
+import { Info, Diamond, Star, Plus } from 'lucide-react';
 
 const SymbolLegend = () => (
   <div className="flex flex-col gap-4 p-4 glass-dark h-full border-l border-white/10">
@@ -37,7 +37,7 @@ const SymbolLegend = () => (
       </div>
     </div>
     <div className="mt-auto p-4 glass bg-blue-500/10 border-blue-500/20 text-[10px] text-blue-300 leading-tight">
-      <p>⚠️ Always verify the symbol with the footnotes at the bottom of the page before clicking 'Verify'.</p>
+      <p>⚠️ Always verify the symbol with the footnotes at the bottom of the page before clicking &apos;Verify&apos;.</p>
     </div>
   </div>
 );
@@ -51,8 +51,9 @@ export default function Home() {
   const [selectedPage, setSelectedPage] = useState<number | null>(null);
 
   useEffect(() => {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
     if (activeTab === 'verify') {
-      fetch('http://localhost:8000/api/sections/pending')
+      fetch(`${apiUrl}/api/sections/pending`)
         .then(res => res.json())
         .then(data => {
           setPendingSections(data);
@@ -75,7 +76,8 @@ export default function Home() {
 
   const handleVerify = async (data: any) => {
     try {
-      const res = await fetch('http://localhost:8000/api/verify', {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const res = await fetch(`${apiUrl}/api/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),

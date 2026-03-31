@@ -46,7 +46,8 @@ async def get_pending_sections():
         # Convert local path to reachable URL
         if doc.get("source_image_path"):
             filename = os.path.basename(doc["source_image_path"])
-            doc["source_image_path"] = f"http://localhost:8000/scans/{filename}"
+            base_url = os.getenv("BASE_URL", "http://localhost:8000")
+            doc["source_image_path"] = f"{base_url}/scans/{filename}"
         sections.append(doc)
     return sections
 
