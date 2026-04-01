@@ -2,7 +2,7 @@ import os
 import sys
 # Allow running as a script from the root directory
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, BackgroundTasks, UploadFile, File
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -13,6 +13,10 @@ import asyncio
 from database.manager import DatabaseManager
 from agent.graph import graph
 from bson import ObjectId
+import uuid
+import shutil
+from datetime import datetime
+from api.tasks import process_pdf_background
 
 app = FastAPI(title="Nepalese Legal RAG API")
 
@@ -46,8 +50,12 @@ async def get_pending_sections():
         # Convert local path to reachable URL
         if doc.get("source_image_path"):
             filename = os.path.basename(doc["source_image_path"])
+            job_id = doc.get("job_id", "")
             base_url = os.getenv("BASE_URL", "http://localhost:8000")
-            doc["source_image_path"] = f"{base_url}/scans/{filename}"
+            if job_id:
+                doc["source_image_path"] = f"{base_url}/scans/{job_id}/{filename}"
+            else:
+                doc["source_image_path"] = f"{base_url}/scans/{filename}"
         sections.append(doc)
     return sections
 
@@ -67,6 +75,49 @@ async def verify_section(update: VerificationUpdate):
         # Update vector DB
         db_manager.mark_as_verified(update.mongo_id)
         return {"status": "success", "message": f"Section {update.mongo_id} verified."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/upload-pdf")
+async def upload_pdf(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
+    if not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are allowed")
+
+    job_id = str(uuid.uuid4())
+    os.makedirs("uploads/temp_pdfs", exist_ok=True)
+    file_path = f"uploads/temp_pdfs/{job_id}_{file.filename}"
+    
+    with open(file_path, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+        
+    db_manager.db["extraction_jobs"].insert_one({
+        "job_id": job_id,
+        "filename": file.filename,
+        "status": "pending",
+        "progress_message": "Uploaded. Waiting for background worker...",
+        "total_pages": 0,
+        "processed_pages": 0,
+        "created_at": datetime.utcnow()
+    })
+    
+    background_tasks.add_task(process_pdf_background, job_id, file_path, file.filename)
+    
+    return {"status": "success", "job_id": job_id, "message": "Extraction started in background."}
+
+@app.get("/api/extraction-jobs")
+async def get_extraction_jobs():
+    cursor = db_manager.db["extraction_jobs"].find().sort("created_at", -1).limit(20)
+    jobs = []
+    for doc in cursor:
+        doc.pop("_id", None)
+        jobs.append(doc)
+    return jobs
+
+@app.delete("/api/extraction-jobs/{job_id}")
+async def delete_extraction_job(job_id: str):
+    try:
+        db_manager.delete_job_data(job_id)
+        return {"status": "success", "message": f"Job {job_id} and all related data deleted."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

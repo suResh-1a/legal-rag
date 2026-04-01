@@ -5,7 +5,8 @@ import { Navbar, SplitView } from '@/components/layout/AppLayout';
 import { PdfViewer } from '@/components/verification/PdfViewer';
 import { EditorForm } from '@/components/verification/EditorForm';
 import { ChatInterface } from '@/components/chat/ChatInterface';
-import { Info, Diamond, Star, Plus } from 'lucide-react';
+import { IngestionDashboard } from '@/components/ingestion/IngestionDashboard';
+import { Info, Diamond, Star, Plus, FileText } from 'lucide-react';
 
 const SymbolLegend = () => (
   <div className="flex flex-col gap-4 p-4 glass-dark h-full border-l border-white/10">
@@ -49,6 +50,7 @@ export default function Home() {
   
   const [sidebarMode, setSidebarMode] = useState<'dafa' | 'page'>('dafa');
   const [selectedPage, setSelectedPage] = useState<number | null>(null);
+  const [selectedDocument, setSelectedDocument] = useState<string | null>(null);
 
   useEffect(() => {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -65,14 +67,46 @@ export default function Home() {
     }
   }, [activeTab]);
 
+  const documents = React.useMemo(() => {
+     const docs = new Set<string>();
+     pendingSections.forEach(s => {
+        docs.add(s.document_filename || s.act_name || "Unknown Document");
+     });
+     return Array.from(docs).sort();
+  }, [pendingSections]);
+
+  useEffect(() => {
+     if (documents.length > 0 && (!selectedDocument || !documents.includes(selectedDocument))) {
+        setSelectedDocument(documents[0]);
+     } else if (documents.length === 0) {
+        setSelectedDocument(null);
+     }
+  }, [documents, selectedDocument]);
+
+  const filteredSections = React.useMemo(() => {
+     if (!selectedDocument) return [];
+     return pendingSections.filter(s => (s.document_filename || s.act_name || "Unknown Document") === selectedDocument);
+  }, [pendingSections, selectedDocument]);
+
+  useEffect(() => {
+     if (filteredSections.length > 0) {
+        if (!selectedSection || !filteredSections.find(s => s._id === selectedSection._id)) {
+           setSelectedSection(filteredSections[0]);
+        }
+        if (selectedPage === null || !filteredSections.find(s => s.page_num === selectedPage)) {
+           setSelectedPage(filteredSections[0].page_num);
+        }
+     }
+  }, [filteredSections, selectedDocument]);
+
   const pages = React.useMemo(() => {
     const grouped = new Map<number, any[]>();
-    pendingSections.forEach(s => {
+    filteredSections.forEach(s => {
       if(!grouped.has(s.page_num)) grouped.set(s.page_num, []);
       grouped.get(s.page_num)!.push(s);
     });
     return Array.from(grouped.entries()).sort((a,b) => a[0] - b[0]);
-  }, [pendingSections]);
+  }, [filteredSections]);
 
   const handleVerify = async (data: any) => {
     try {
@@ -101,7 +135,27 @@ export default function Home() {
       <div className="flex-1">
         {activeTab === 'verify' ? (
           <div className="flex h-full">
-            <div className="w-[260px] flex-shrink-0 h-[calc(100vh-64px)] overflow-auto border-r border-white/10 p-4 flex flex-col gap-2">
+            <div className="w-[260px] flex-shrink-0 h-[calc(100vh-64px)] overflow-auto border-r border-white/10 p-4 flex flex-col gap-2 relative">
+               
+               {/* Global Document Selector */}
+               {documents.length > 0 && (
+                 <div className="mb-4 bg-white/5 p-3 rounded-xl border border-white/10">
+                   <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                      <FileText size={12} className="text-amber-500" />
+                      Select Document
+                   </p>
+                   <select 
+                     value={selectedDocument || ""} 
+                     onChange={(e) => setSelectedDocument(e.target.value)}
+                     className="w-full bg-black/40 border border-white/10 text-xs text-gray-300 rounded-lg p-2 outline-none focus:border-blue-500/50"
+                   >
+                     {documents.map(doc => (
+                       <option key={doc} value={doc}>{doc}</option>
+                     ))}
+                   </select>
+                 </div>
+               )}
+
                <div className="flex gap-2 mb-2">
                   <button 
                      onClick={() => setSidebarMode('dafa')} 
@@ -118,12 +172,12 @@ export default function Home() {
                </div>
                
                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-widest mt-2 mb-2">
-                 Pending ( {sidebarMode === 'dafa' ? pendingSections.length : pages.length} )
+                 Pending ( {sidebarMode === 'dafa' ? filteredSections.length : pages.length} )
                </h3>
                
                <div className="flex-1 overflow-auto space-y-2 pr-2">
                  {sidebarMode === 'dafa' ? (
-                   pendingSections.map(s => (
+                   filteredSections.map(s => (
                      <button 
                       key={s._id}
                       onClick={() => setSelectedSection(s)}
@@ -176,6 +230,10 @@ export default function Home() {
             <div className="w-[240px] flex-shrink-0 h-[calc(100vh-64px)]">
               <SymbolLegend />
             </div>
+          </div>
+        ) : activeTab === 'ingestion' ? (
+          <div className="flex h-full w-full">
+             <IngestionDashboard />
           </div>
         ) : (
           <div className="flex h-full">

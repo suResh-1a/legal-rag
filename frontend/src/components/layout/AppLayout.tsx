@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
-import { LayoutDashboard, MessageSquare, ShieldCheck } from 'lucide-react';
+import { LayoutDashboard, MessageSquare, ShieldCheck, UploadCloud } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface SplitViewProps {
@@ -51,6 +51,16 @@ export const Navbar: React.FC<{ activeTab: string; onTabChange: (tab: string) =>
         >
           <MessageSquare size={18} />
           Legal Agent
+        </button>
+        <button
+          onClick={() => onTabChange('ingestion')}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2 rounded-lg transition-all",
+            activeTab === 'ingestion' ? "bg-amber-600/20 text-amber-500 border border-amber-500/30" : "text-gray-400 hover:text-white"
+          )}
+        >
+          <UploadCloud size={18} />
+          Ingestion Hub
         </button>
       </div>
       <div className="w-32"></div> {/* Spacer for balance */}
