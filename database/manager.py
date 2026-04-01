@@ -115,7 +115,8 @@ class DatabaseManager:
             "hierarchy_path": section_data.get("hierarchy_path"),
             "has_amendment": has_amendment,
             "page_num": section_data.get("page_num"),
-            "source_collection": collection
+            "source_collection": collection,
+            "type": section_data.get("type", "dafa")
         }
         
         self.qdrant_client.upsert(

@@ -8,23 +8,33 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DEFAULT_LEGAL_PROMPT = """You are a Legal Digitizer powering a Universal Multimodal Pipeline. Extract every Dafa (Section) and Upadafa. 
-Pay extreme attention to visual symbols (Diamonds, ⊓, Σ, *, +) before section numbers. These are Amendment Markers. Look at the bottom of the page for footnotes to map these symbols to specific Amendment Acts. Capture the text in pure Nepali Unicode. If a section is cut off at the bottom, mark it with "is_incomplete": true.
+DEFAULT_LEGAL_PROMPT = """You are a Legal Digitizer powering a Universal Multimodal Pipeline. Extract every entity accurately.
+Pay extreme attention to visual symbols (Diamonds, ⊓, Σ, *, +). These are Amendment Markers. Look at the bottom of the page for footnotes to map these symbols to Amendment Acts. Capture text in pure Nepali Unicode.
 
-CRITICAL INSTRUCTION - VISION TO MARKDOWN: Convert the "content" field into Structured Markdown format.
-1. If you see a **Table**, represent it STRICTLY in Markdown `| col | col |`.
-2. If you see a **Heading**, use `#` or `##`.
-3. If you see a **Form**, represent it as a List of Key-Value pairs.
-4. If there is a **Section Number (Dafa)**, clearly label it.
+CRITICAL INSTRUCTION - VISION-FIRST GRID ANALYSIS (TABLES):
+If the image contains a structural Table, Schedule, or Budget Grid:
+1. Extract the ENTIRE table as a SINGLE `table_row` object. DO NOT split rows into separate JSON items.
+2. Construct one continuous Markdown Table (`| col1 | col2 |`) representing the whole grid on the page.
+3. Set `"dafa_no"` to a range or title (e.g., 'S.N. 7-20' or 'Schedules'). 
+4. Ensure headers are only at the top of the Markdown table, once.
+5. Set `"type"` to "table_row".
+
+FOR FORM ENTRIES:
+- If the page is a form (Key-Value pairs), group all entries into a single "form_entry" object.
+
+FOR STANDARD LEGAL TEXT (DAFAS/SECTIONS):
+- Extract Sections (Dafa) and Subsections as normal, keeping them as separate objects to ensure precise hierarchy.
+- Set `"type"` to "dafa".
 
 Output must be a strictly typed JSON list of objects:
 [
   {
-    "dafa_no": "Section Number in Nepali",
-    "title": "Section Title in Nepali",
-    "content": "Full section text in Nepali",
+    "type": "dafa" | "table_row" | "form_entry",
+    "dafa_no": "Section Number, S.N, or Row Index in Nepali",
+    "title": "Section Title, Table Title, or Form Name in Nepali",
+    "content": "Full Markdown text for the row/section (with prepended headers if table)",
     "symbol_found": "The symbol found (e.g., Diamond, ⊓, Σ, *, +) or null",
-    "amendment_history": "Extracted amendment act from footnotes mapping the symbol or null",
+    "amendment_history": "Extracted footnote text or null",
     "page_num": integer,
     "is_incomplete": boolean
   }

@@ -17,7 +17,7 @@ from bson import ObjectId
 import uuid
 import shutil
 from datetime import datetime
-from api.tasks import process_pdf_background
+from api.tasks import process_pdf_background, redo_page_extraction
 
 app = FastAPI(title="Nepalese Legal RAG API")
 
@@ -41,6 +41,43 @@ class VerificationUpdate(BaseModel):
 class ChatRequest(BaseModel):
     question: str
     session_id: str = "default"
+
+class MergeRequest(BaseModel):
+    mongo_ids: List[str]
+
+@app.post("/api/sections/merge")
+async def merge_sections(request: MergeRequest):
+    """Merge multiple fragmented OCR sections into the primary anchor and delete the rest."""
+    if len(request.mongo_ids) < 2:
+        raise HTTPException(status_code=400, detail="Need at least 2 sections to merge")
+    
+    try:
+        primary_id = ObjectId(request.mongo_ids[0])
+        primary_doc = db_manager.sections_col.find_one({"_id": primary_id})
+        
+        if not primary_doc:
+            raise HTTPException(status_code=404, detail="Primary document not found")
+        
+        merged_content = primary_doc.get("content", "")
+        
+        for idx in range(1, len(request.mongo_ids)):
+            other_id = ObjectId(request.mongo_ids[idx])
+            other_doc = db_manager.sections_col.find_one({"_id": other_id})
+            if other_doc:
+                merged_content += "\n" + other_doc.get("content", "")
+                db_manager.sections_col.delete_one({"_id": other_id})
+        
+        db_manager.sections_col.update_one(
+            {"_id": primary_id},
+            {"$set": {"content": merged_content}}
+        )
+        
+        return {"status": "success", "message": "Sections merged successfully."}
+    except Exception as e:
+        print(f"❌ MERGE ERROR: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/sections/pending")
 async def get_pending_sections():
@@ -80,6 +117,16 @@ async def verify_section(update: VerificationUpdate):
         return {"status": "success", "message": f"Section {update.mongo_id} verified."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/sections/redo")
+async def redo_section_extraction(background_tasks: BackgroundTasks, request: dict):
+    """Trigger a redo of the extraction for the page associated with this mongo_id."""
+    mongo_id = request.get("mongo_id")
+    if not mongo_id:
+        raise HTTPException(status_code=400, detail="mongo_id is required")
+    
+    background_tasks.add_task(redo_page_extraction, mongo_id)
+    return {"status": "success", "message": "Re-extraction started in background."}
 
 @app.post("/api/upload-pdf")
 async def upload_pdf(background_tasks: BackgroundTasks, file: UploadFile = File(...)):

@@ -137,3 +137,62 @@ def process_pdf_background(job_id: str, file_path: str, original_filename: str):
                 "completed_at": datetime.utcnow()
             }}
         )
+
+def redo_page_extraction(mongo_id: str):
+    """
+    Downloads a specific page scan from MinIO and re-extracts it using Gemini.
+    Replaces all existing 'pending' items for that page to ensure data consistency.
+    """
+    try:
+        from bson import ObjectId
+        section = db_manager.sections_col.find_one({"_id": ObjectId(mongo_id)})
+        if not section:
+            print(f"❌ REDO ERROR: Section {mongo_id} not found.")
+            return
+
+        job_id = section.get("job_id")
+        page_num = section.get("page_num")
+        source_img = section.get("source_image_path")
+        doc_filename = section.get("document_filename")
+
+        if not source_img or not page_num:
+            print(f"❌ REDO ERROR: Missing source metadata for section {mongo_id}.")
+            return
+
+        # 1. Download image from MinIO
+        local_temp = f"uploads/redo_page_{page_num}_{uuid.uuid4().hex[:8]}.png"
+        os.makedirs(os.path.dirname(local_temp), exist_ok=True)
+        minio_db.client.fget_object(minio_db.bucket_name, source_img, local_temp)
+
+        # 2. Re-extract via Gemini (Grid-Analysis prompt will be used)
+        extractor = GeminiExtractor()
+        new_page_data = extractor.extract_legal_data(local_temp, page_num)
+
+        # 3. Inject metadata
+        for item in new_page_data:
+            item["job_id"] = job_id
+            item["document_filename"] = doc_filename
+            item["source_image_path"] = source_img
+            item["page_num"] = page_num
+            item["verification_status"] = "pending"
+
+        # 4. Atomic Replace: Delete all sections for this page/job and insert new ones
+        db_manager.sections_col.delete_many({
+            "job_id": job_id,
+            "page_num": page_num,
+            "verification_status": "pending"
+        })
+        
+        if new_page_data:
+            db_manager.sections_col.insert_many(new_page_data)
+
+        # Cleanup
+        if os.path.exists(local_temp):
+            os.remove(local_temp)
+            
+        print(f"✅ REDO SUCCESS: Page {page_num} for Job {job_id} re-extracted.")
+
+    except Exception as e:
+        print(f"❌ REDO TASK FAILED: {e}")
+        import traceback
+        traceback.print_exc()

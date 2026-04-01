@@ -50,6 +50,8 @@ export default function Home() {
   const [selectedSection, setSelectedSection] = useState<any>(null);
   
   const [sidebarMode, setSidebarMode] = useState<'dafa' | 'page'>('dafa');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
   const [selectedPage, setSelectedPage] = useState<number | null>(null);
   const [selectedDocument, setSelectedDocument] = useState<string | null>(null);
 
@@ -108,6 +110,35 @@ export default function Home() {
     });
     return Array.from(grouped.entries()).sort((a,b) => a[0] - b[0]);
   }, [filteredSections]);
+
+  const handleMerge = async () => {
+    if (selectedIds.length < 2) return;
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const res = await fetch(`${apiUrl}/api/sections/merge`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mongo_ids: selectedIds }),
+      });
+      if (res.ok) {
+        // Refresh the list
+        const updatedPending = await fetch(`${apiUrl}/api/sections/pending`).then(r => r.json());
+        setPendingSections(updatedPending);
+        setSelectedIds([]);
+        setIsMultiSelectMode(false);
+        toast.success("Sections merged successfully!");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to merge sections.");
+    }
+  };
+
+  const handleToggleSelect = (id: string) => {
+    setSelectedIds(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
 
   const handleVerify = async (data: any) => {
     try {
@@ -172,35 +203,69 @@ export default function Home() {
                   </button>
                </div>
                
-               <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-widest mt-2 mb-2">
-                 Pending ( {sidebarMode === 'dafa' ? filteredSections.length : pages.length} )
-               </h3>
-               
-               <div className="flex-1 overflow-auto space-y-2 pr-2">
-                 {sidebarMode === 'dafa' ? (
-                   filteredSections.map(s => (
-                     <button 
-                      key={s._id}
-                      onClick={() => setSelectedSection(s)}
-                      className={`w-full text-left p-3 rounded-lg transition-all border ${selectedSection?._id === s._id ? 'bg-blue-600/10 border-blue-500/40' : 'bg-white/5 border-transparent hover:border-white/10'}`}
-                     >
-                       <p className="text-sm font-bold truncate">Dafa {s.dafa_no}</p>
-                       <p className="text-[10px] text-gray-500 truncate">{s.act_name}</p>
-                     </button>
-                   ))
-                 ) : (
-                   pages.map(([pageNum, sections]) => (
-                     <button 
-                      key={pageNum}
-                      onClick={() => setSelectedPage(pageNum)}
-                      className={`w-full text-left p-3 rounded-lg transition-all border ${selectedPage === pageNum ? 'bg-blue-600/10 border-blue-500/40' : 'bg-white/5 border-transparent hover:border-white/10'}`}
-                     >
-                       <p className="text-sm font-bold truncate">Page {pageNum}</p>
-                       <p className="text-[10px] text-gray-500 truncate">{sections.length} items to verify</p>
-                     </button>
-                   ))
-                 )}
-               </div>
+                <div className="flex items-center justify-between mt-2 mb-2">
+                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-widest leading-none">
+                    Pending ( {sidebarMode === 'dafa' ? filteredSections.length : pages.length} )
+                  </h3>
+                  <button 
+                    onClick={() => {
+                      setIsMultiSelectMode(!isMultiSelectMode);
+                      setSelectedIds([]);
+                    }}
+                    className={`text-[10px] px-2 py-1 rounded border transition-all ${isMultiSelectMode ? 'bg-blue-600 text-white border-blue-500' : 'text-gray-400 border-white/10 hover:bg-white/5'}`}
+                  >
+                    {isMultiSelectMode ? 'Cancel' : 'Multi-select'}
+                  </button>
+                </div>
+                
+                {isMultiSelectMode && selectedIds.length > 1 && (
+                  <button 
+                    onClick={handleMerge}
+                    className="w-full mb-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold py-2 rounded-lg shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2"
+                  >
+                    Merge {selectedIds.length} Selected
+                  </button>
+                )}
+                
+                <div className="flex-1 overflow-auto space-y-2 pr-2">
+                  {sidebarMode === 'dafa' ? (
+                    filteredSections.map(s => (
+                      <button 
+                       key={s._id}
+                       onClick={() => isMultiSelectMode ? handleToggleSelect(s._id) : setSelectedSection(s)}
+                       className={`w-full text-left p-3 rounded-lg transition-all border ${
+                         (!isMultiSelectMode && selectedSection?._id === s._id) || (isMultiSelectMode && selectedIds.includes(s._id))
+                          ? 'bg-blue-600/10 border-blue-500/40' 
+                          : 'bg-white/5 border-transparent hover:border-white/10'
+                       }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-bold truncate">Dafa {s.dafa_no}</p>
+                          {isMultiSelectMode && (
+                            <div className={`w-4 h-4 rounded border flex items-center justify-center ${selectedIds.includes(s._id) ? 'bg-blue-600 border-blue-500' : 'border-white/20'}`}>
+                              {selectedIds.includes(s._id) && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                            </div>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-gray-500 truncate">{s.act_name}</p>
+                        {s.type === 'table_row' && (
+                          <span className="inline-block mt-1 text-[8px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded border border-blue-500/30 uppercase font-bold tracking-tighter">Table Row</span>
+                        )}
+                      </button>
+                    ))
+                  ) : (
+                    pages.map(([pageNum, sections]) => (
+                      <button 
+                       key={pageNum}
+                       onClick={() => setSelectedPage(pageNum)}
+                       className={`w-full text-left p-3 rounded-lg transition-all border ${selectedPage === pageNum ? 'bg-blue-600/10 border-blue-500/40' : 'bg-white/5 border-transparent hover:border-white/10'}`}
+                      >
+                        <p className="text-sm font-bold truncate">Page {pageNum}</p>
+                        <p className="text-[10px] text-gray-500 truncate">{sections.length} items to verify</p>
+                      </button>
+                    ))
+                  )}
+                </div>
             </div>
             
             <div className="flex-1">
