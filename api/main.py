@@ -39,6 +39,7 @@ class VerificationUpdate(BaseModel):
 
 class ChatRequest(BaseModel):
     question: str
+    session_id: str = "default"
 
 @app.get("/api/sections/pending")
 async def get_pending_sections():
@@ -121,14 +122,40 @@ async def delete_extraction_job(job_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/chat/history")
+async def get_chat_history(session_id: str = "default"):
+    return {"status": "success", "history": db_manager.get_chat_history(session_id)}
+
+@app.delete("/api/chat/history")
+async def clear_chat_history(session_id: str = "default"):
+    try:
+        db_manager.clear_chat_history(session_id)
+        return {"status": "success", "message": "Chat history cleared."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/api/chat")
 async def chat_stream(request: ChatRequest):
     """Stream LangGraph reasoning steps and final answer."""
+    # Save user message
+    db_manager.save_chat_message(role="user", content=request.question, session_id=request.session_id)
+    # Fetch recent history (past 6 messages -> 3 turns)
+    history = db_manager.get_chat_history(session_id=request.session_id, limit=6)
+    
     async def event_generator():
-        inputs = {"question": request.question}
+        inputs = {
+            "question": request.question,
+            "chat_history": history[:-1] if history else [] # Pass history excluding the fresh user question 
+        }
         try:
             # graph.stream returns an iterator of events
             for event in graph.stream(inputs):
+                # Intercept final_answer to save it to DB
+                if "synthesizer" in event and "final_answer" in event["synthesizer"]:
+                    ans = event["synthesizer"]["final_answer"]
+                    tokens = event["synthesizer"].get("token_usage")
+                    db_manager.save_chat_message(role="assistant", content=ans, session_id=request.session_id, token_usage=tokens)
+
                 # event is a dict like {'node_name': {state_updates}}
                 try:
                     json_data = json.dumps(event, ensure_ascii=False)

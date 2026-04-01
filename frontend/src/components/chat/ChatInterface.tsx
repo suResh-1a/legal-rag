@@ -1,8 +1,10 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Loader2, Search, FileText, Calendar, CheckCircle2 } from 'lucide-react';
+import { Send, Bot, User, Loader2, Search, FileText, Calendar, CheckCircle2, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -52,6 +54,33 @@ export const ChatInterface: React.FC = () => {
   const [reasoningSteps, setReasoningSteps] = useState<ReasoningStep[]>([]);
   const [isTyping, setIsTyping] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const fetchHistory = async () => {
+      try {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        const res = await fetch(`${apiUrl}/api/chat/history`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.history && data.history.length > 0) setMessages(data.history);
+        }
+      } catch (err) { console.error("Could not fetch history", err); }
+    };
+    fetchHistory();
+  }, []);
+
+  const handleClearChat = async () => {
+    if (!confirm("Are you sure you want to clear your chat history?")) return;
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const res = await fetch(`${apiUrl}/api/chat/history`, { method: 'DELETE' });
+      if (res.ok) {
+        setMessages([]);
+        setReasoningSteps([]);
+        import('react-hot-toast').then(mod => mod.default.success("Chat history cleared!"));
+      }
+    } catch (err) { console.error(err); }
+  };
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -131,8 +160,24 @@ export const ChatInterface: React.FC = () => {
   return (
     <div className="flex h-full gap-6">
       {/* Chat Window */}
-      <div className="flex-1 flex flex-col glass overflow-hidden">
+      <div className="flex-1 flex flex-col glass overflow-hidden relative">
+        <div className="absolute top-4 right-4 z-10">
+           <button 
+             onClick={handleClearChat}
+             disabled={messages.length === 0}
+             className="p-2 rounded-lg bg-black/40 text-gray-400 border border-white/10 hover:border-red-500/50 hover:text-red-400 hover:bg-red-500/10 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+             title="Clear Chat History"
+           >
+             <Trash2 size={16} />
+           </button>
+        </div>
         <div className="flex-1 overflow-auto p-6 space-y-6" ref={scrollRef}>
+          {messages.length === 0 && (
+             <div className="h-full flex flex-col items-center justify-center text-gray-500 opacity-60 space-y-4">
+                <Bot size={48} className="text-purple-400/50" />
+                <p>Start a conversation with the Legal Agent...</p>
+             </div>
+          )}
           {messages.map((m, i) => (
             <div key={i} className={cn(
               "flex flex-col w-full animate-in fade-in duration-500",
@@ -146,10 +191,29 @@ export const ChatInterface: React.FC = () => {
                   {m.role === 'user' ? <User size={20} className="text-blue-400" /> : <Bot size={20} className="text-purple-400" />}
                 </div>
                 <div className={cn(
-                  "text-md leading-relaxed whitespace-pre-wrap",
-                  m.role === 'assistant' ? "text-nepali text-lg text-white" : "text-gray-200"
+                  "text-md leading-relaxed w-full",
+                  m.role === 'assistant' ? "text-nepali text-lg text-white" : "text-gray-200 whitespace-pre-wrap"
                 )}>
-                  {m.content}
+                  {m.role === 'assistant' ? (
+                    <div className="markdown-body space-y-4">
+                      <ReactMarkdown 
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                        table: ({node, ...props}) => <div className="overflow-x-auto my-4"><table className="w-full text-left border-collapse" {...props} /></div>,
+                        th: ({node, ...props}) => <th className="border-b border-white/20 p-2 font-bold bg-white/5" {...props} />,
+                        td: ({node, ...props}) => <td className="border-b border-white/10 p-2" {...props} />,
+                        p: ({node, ...props}) => <p className="leading-relaxed" {...props} />,
+                        ul: ({node, ...props}) => <ul className="list-disc pl-6 space-y-2" {...props} />,
+                        ol: ({node, ...props}) => <ol className="list-decimal pl-6 space-y-2" {...props} />,
+                        strong: ({node, ...props}) => <strong className="font-bold text-blue-300" {...props} />
+                      }}
+                    >
+                      {m.content}
+                      </ReactMarkdown>
+                    </div>
+                  ) : (
+                    m.content
+                  )}
                 </div>
               </div>
               {m.role === 'assistant' && m.token_usage && (

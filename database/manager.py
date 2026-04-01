@@ -18,6 +18,7 @@ class DatabaseManager:
         self.mongo_client = MongoClient(self.mongo_uri)
         self.db = self.mongo_client["legal_rag_db"]
         self.sections_col = self.db["LegalSections"]
+        self.chat_col = self.db["chat_history"]
         
         # Qdrant Setup
         self.qdrant_host = os.getenv("QDRANT_HOST", "localhost")
@@ -156,13 +157,40 @@ class DatabaseManager:
         print("Dropped MongoDB collection: LegalSections")
         
         # 2. Qdrant Drop
-        collections = ["legal_sections_vectors", "legal_pages_vectors"]
         for coll in collections:
             try:
                 self.qdrant_client.delete_collection(coll)
                 print(f"Dropped Qdrant collection: {coll}")
             except Exception as e:
                 print(f"Collection {coll} not found or already deleted: {e}")
+
+    def save_chat_message(self, role: str, content: str, session_id: str = "default", token_usage: dict = None):
+        """Saves a single chat message to the history."""
+        from datetime import datetime
+        msg = {
+            "session_id": session_id,
+            "role": role,
+            "content": content,
+            "timestamp": datetime.utcnow()
+        }
+        if token_usage:
+            msg["token_usage"] = token_usage
+        self.chat_col.insert_one(msg)
+
+    def get_chat_history(self, session_id: str = "default", limit: int = 50):
+        """Retrieves past messages for standard AgentState formatting."""
+        cursor = self.chat_col.find({"session_id": session_id}).sort("timestamp", 1).limit(limit)
+        messages = []
+        for doc in cursor:
+            msg = {"role": doc["role"], "content": doc["content"]}
+            if "token_usage" in doc:
+                msg["token_usage"] = doc["token_usage"]
+            messages.append(msg)
+        return messages
+
+    def clear_chat_history(self, session_id: str = "default"):
+        """Deletes all messages for a session."""
+        self.chat_col.delete_many({"session_id": session_id})
 
 if __name__ == "__main__":
     # Test DB Manager

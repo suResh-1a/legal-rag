@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { UploadCloud, FileType, CheckCircle, AlertTriangle, Loader2, ArrowRight, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import toast from 'react-hot-toast';
 
 export const IngestionDashboard = () => {
   const [jobs, setJobs] = useState<any[]>([]);
@@ -37,11 +38,11 @@ export const IngestionDashboard = () => {
       if (res.ok) {
         setJobs(prev => prev.filter(j => j.job_id !== jobId));
       } else {
-        alert("Failed to delete the document.");
+        toast.error("Failed to delete the document.");
       }
     } catch (err) {
       console.error("Error deleting job:", err);
-      alert("Error connecting to server to delete.");
+      toast.error("Error connecting to server to delete.");
     }
   };
 
@@ -50,7 +51,7 @@ export const IngestionDashboard = () => {
     if (!file) return;
 
     if (file.type !== "application/pdf") {
-      alert("Please upload a valid PDF file.");
+      toast.error("Please upload a valid PDF file.");
       return;
     }
 
@@ -64,15 +65,16 @@ export const IngestionDashboard = () => {
         body: formData,
       });
       if (res.ok) {
+        toast.success("Document added to queue!");
         // Trigger immediate fetch
         const jobsRes = await fetch('http://localhost:8000/api/extraction-jobs');
         if (jobsRes.ok) setJobs(await jobsRes.json());
       } else {
-        alert("Upload failed.");
+        toast.error("Upload failed.");
       }
     } catch (err) {
       console.error(err);
-      alert("Error connecting to server.");
+      toast.error("Error connecting to server.");
     } finally {
       setIsUploading(false);
       // Reset input

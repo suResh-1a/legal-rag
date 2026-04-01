@@ -7,6 +7,7 @@ import { EditorForm } from '@/components/verification/EditorForm';
 import { ChatInterface } from '@/components/chat/ChatInterface';
 import { IngestionDashboard } from '@/components/ingestion/IngestionDashboard';
 import { Info, Diamond, Star, Plus, FileText } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 const SymbolLegend = () => (
   <div className="flex flex-col gap-4 p-4 glass-dark h-full border-l border-white/10">
@@ -121,7 +122,7 @@ export default function Home() {
         if (sidebarMode === 'dafa') {
            setSelectedSection(null);
         }
-        alert("Section verified successfully!");
+        toast.success("Section verified successfully!");
       }
     } catch (err) {
       console.error(err);
