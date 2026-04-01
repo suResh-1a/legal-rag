@@ -12,6 +12,7 @@ import json
 import asyncio
 from database.manager import DatabaseManager
 from agent.graph import graph
+from utils.minio_client import minio_db
 from bson import ObjectId
 import uuid
 import shutil
@@ -48,15 +49,16 @@ async def get_pending_sections():
     sections = []
     for doc in cursor:
         doc["_id"] = str(doc["_id"])
-        # Convert local path to reachable URL
+        # Convert S3 object name to Presigned URL
         if doc.get("source_image_path"):
-            filename = os.path.basename(doc["source_image_path"])
-            job_id = doc.get("job_id", "")
-            base_url = os.getenv("BASE_URL", "http://localhost:8000")
-            if job_id:
-                doc["source_image_path"] = f"{base_url}/scans/{job_id}/{filename}"
-            else:
-                doc["source_image_path"] = f"{base_url}/scans/{filename}"
+            old_path = doc["source_image_path"]
+            # Clean up old local path artifacts if applicable
+            if old_path.startswith("uploads/temp_images/"):
+                old_path = old_path.replace("uploads/temp_images/", "scans/")
+            
+            # Generate temporary secure URL for frontend
+            doc["source_image_path"] = minio_db.get_presigned_url(old_path)
+            
         sections.append(doc)
     return sections
 
@@ -120,6 +122,9 @@ async def delete_extraction_job(job_id: str):
         db_manager.delete_job_data(job_id)
         return {"status": "success", "message": f"Job {job_id} and all related data deleted."}
     except Exception as e:
+        print(f"❌ DELETE JOB ERROR: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/chat/history")

@@ -5,9 +5,11 @@ from qdrant_client import QdrantClient
 from database.manager import DatabaseManager
 from agent.tools import bs_to_ad
 import google.generativeai as genai
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
+import os
 
-load_dotenv()
+env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env')
+load_dotenv(env_path, override=True)
 
 # State definition
 class AgentState(TypedDict):

@@ -5,11 +5,12 @@ from qdrant_client import QdrantClient
 from qdrant_client.http.models import Distance, VectorParams, PointStruct
 from bson import ObjectId
 from typing import Dict, Any, List
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
 from database.models import LegalSection
 from database.embeddings import EmbeddingManager
 
-load_dotenv()
+env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env')
+load_dotenv(env_path, override=True)
 
 class DatabaseManager:
     def __init__(self):
@@ -157,6 +158,7 @@ class DatabaseManager:
         print("Dropped MongoDB collection: LegalSections")
         
         # 2. Qdrant Drop
+        collections = ["legal_sections_vectors", "legal_pages_vectors"]
         for coll in collections:
             try:
                 self.qdrant_client.delete_collection(coll)
@@ -191,6 +193,11 @@ class DatabaseManager:
     def clear_chat_history(self, session_id: str = "default"):
         """Deletes all messages for a session."""
         self.chat_col.delete_many({"session_id": session_id})
+
+    def delete_job_data(self, job_id: str):
+        """Deletes an extraction job tracking document and its pending sections."""
+        self.db["extraction_jobs"].delete_one({"job_id": job_id})
+        self.sections_col.delete_many({"job_id": job_id})
 
 if __name__ == "__main__":
     # Test DB Manager

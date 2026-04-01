@@ -8,6 +8,7 @@ from ingestion.pdf_processor import convert_pdf_to_images
 from ingestion.gemini_extractor import GeminiExtractor
 from ingestion.stitcher import stitch_sections
 from database.loader import load_json_to_db
+from utils.minio_client import minio_db
 
 db_manager = DatabaseManager()
 
@@ -45,10 +46,18 @@ def process_pdf_background(job_id: str, file_path: str, original_filename: str):
             for attempt in range(max_retries):
                 try:
                     page_data = extractor.extract_legal_data(img_path, page_num)
-                    # Inject job and document details for reliable frontend grouping
+                    
+                    # Upload original scanned page to MinIO cloud storage
+                    object_name = f"scans/{job_id}/page_{page_num}.png"
+                    minio_db.upload_file(object_name=object_name, file_path=img_path)
+                    
+                    # Inject job, document, and minio object details
                     for item in page_data:
                         item["job_id"] = job_id
                         item["document_filename"] = original_filename
+                        item["source_image_path"] = object_name # Store the MinIO object name, not local path
+                        item["page_num"] = page_num
+                        
                     all_pages_raw_data.append(page_data)
                     break
                 except Exception as e:

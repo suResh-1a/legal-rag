@@ -8,7 +8,14 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DEFAULT_LEGAL_PROMPT = """You are a Legal Digitizer. Extract every Dafa (Section) and Upadafa. Pay extreme attention to visual symbols (Diamonds, ⊓, Σ, *, +) before section numbers. These are Amendment Markers. Look at the bottom of the page for footnotes to map these symbols to specific Amendment Acts. Capture the text in pure Nepali Unicode. If a section is cut off at the bottom, mark it with "is_incomplete": true.
+DEFAULT_LEGAL_PROMPT = """You are a Legal Digitizer powering a Universal Multimodal Pipeline. Extract every Dafa (Section) and Upadafa. 
+Pay extreme attention to visual symbols (Diamonds, ⊓, Σ, *, +) before section numbers. These are Amendment Markers. Look at the bottom of the page for footnotes to map these symbols to specific Amendment Acts. Capture the text in pure Nepali Unicode. If a section is cut off at the bottom, mark it with "is_incomplete": true.
+
+CRITICAL INSTRUCTION - VISION TO MARKDOWN: Convert the "content" field into Structured Markdown format.
+1. If you see a **Table**, represent it STRICTLY in Markdown `| col | col |`.
+2. If you see a **Heading**, use `#` or `##`.
+3. If you see a **Form**, represent it as a List of Key-Value pairs.
+4. If there is a **Section Number (Dafa)**, clearly label it.
 
 Output must be a strictly typed JSON list of objects:
 [
