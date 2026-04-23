@@ -42,7 +42,7 @@ Output must be a strictly typed JSON list of objects:
 """
 
 class GeminiExtractor:
-    def __init__(self, api_key: Optional[str] = None, model_name: str = "gemini-2.0-flash"):
+    def __init__(self, api_key: Optional[str] = None, model_name: str = "gemini-2.5-flash-lite"):
         self.api_key = api_key or os.getenv("GOOGLE_API_KEY")
         if not self.api_key:
             raise ValueError("GOOGLE_API_KEY NOT FOUND")

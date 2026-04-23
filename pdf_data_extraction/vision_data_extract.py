@@ -24,7 +24,7 @@ SOURCE_URL = "https://lawcommission.gov.np"
 
 def extract_from_image(image_path, page_num):
     print(f"[{page_num}] Sending {image_path} to Gemini...")
-    model = genai.GenerativeModel(model_name="gemini-2.0-flash")
+    model = genai.GenerativeModel(model_name="gemini-2.5-flash-lite")
     img = PIL.Image.open(image_path)
     
     prompt = f"""

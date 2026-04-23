@@ -36,40 +36,61 @@ def upload_to_gemini(path):
     return file
 
 def extract_legal_batch(file_handle, start, end):
-    # Using gemini-2.0-flash as it is confirmed to be available
-    model = genai.GenerativeModel(model_name="gemini-2.0-flash")
+    # Using gemini-2.5-flash-lite as it is confirmed to be available
+    model = genai.GenerativeModel(model_name="gemini-2.5-flash-lite")
     
     # SYSTEM PROMPT - Very specific for Nepal Law Commission PDFs
-    prompt = f"""
-    Analyze pages {start} to {end} of the provided Nepal Law PDF.
-    
-    TASK: 
-    Convert the legal text into a structured JSON list.
-    
-    CRITICAL RULES FOR NEPALESE LAW:
-    1. SYMBOLS: If a Dafa (Section) starts with symbols like '⊓', 'Σ', '*', diamonds, boxes, stars,etc symbol can bw weird stranger but these are Amendment markers not noise or mistake.You must NOT skip them.
-    2. FOOTNOTES: Look at the very bottom of the page. Find the legend for these symbols. 
-       - e.g., if '⊓' is at the bottom as 'बीउ बिजन (दोस्रो संशोधन) ऐन, २०७९', map that text to the section.
-    3. HIERARCHY: Identify 'Dafa' (Section), 'Upadafa' (Sub-section), and 'Khanda' (Clause).
-    4. LANGUAGE: Use standard Nepali Unicode. Fix common OCR typos (like 'तफा' to 'दफा').
+    prompt = f
+    """
+            ### Revised Prompt
 
-    TASK:
-    1. Scan the start of every Dafa and Upadafa. 
-    2. If you see ANY visual symbol (even a small diamond shape), capture it.
-    3. Read the FOOTNOTES at the bottom of the page to find what that symbol means (which Amendment Act it refers to).
-    4. Format the output into JSON.
-    
-    OUTPUT FORMAT (Return ONLY JSON):
-    [
-      {{
-        "dafa_no": "The number (e.g., 9 or 10ka)",
-        "title": "The heading of the section",
-        "symbol": "The character found (e.g., ⊓)",
-        "amendment_history": "The full text from the footnote explaining this symbol",
-        "content": "The full text of the law in this section",
-        "page_ref": {start}-{end}
-      }}
-    ]
+            **System Role:** You are a specialized Legal Document Parser for the Nepal Law Commission. Your expertise is in identifying Amendment Markers (Footnote Symbols) that indicate legislative history.
+
+            **Task:** Analyze pages {start} to {end} of the provided PDF and convert the text into a structured JSON list.
+
+            **CRITICAL PARSING LOGIC:**
+            1.  **FOOTNOTE LEGEND (DO THIS FIRST):** Look at the footer (bottom area) of every page. Create a mental map of symbols/markers to their corresponding Amendment Act. Symbols include Greek letters ($\rho, \tau, \Sigma, \nabla, \kappa$), Devanagari numbers ($१, २, ३$), or icons (✂, *, $\square$).
+                *   *Example:* If the footer says "$\rho$ दोश्रो संशोधनद्वारा थप," then every time you see $\rho$ in the body, the `amendment_history` is "Added by the Second Amendment."
+
+            2.  **NUMBER INTEGRITY (MANDATORY):** Do NOT merge Section/Sub-section numbers with footnote markers.
+                *   *Example:* If you see "८७", look at the context. It is likely Section **८** (8) with Footnote **७** (7). Do not output "87".
+
+            3.  **HIERARCHY & CLEANING:**
+                *   **Dafa (Section):** The main bold numbers.
+                *   **Upadafa (Sub-section):** Numbers in brackets like (१), (२).
+                *   **Khanda (Clause):** Letters like (क), (ख).
+                *   **Typos:** Correct OCR errors (e.g., 'तफा' -> 'दफा', 'पठारी' -> 'पैठारी', 'उच्चोग' -> 'उद्योग').
+
+            4.  **AMENDMENT MARKERS:** Do not delete symbols found next to section headings. Capture them in the `symbol` field.
+
+            ---
+
+            **OUTPUT JSON SCHEMA:**
+            Return **ONLY** a JSON array. Each object must follow this structure:
+
+            ```json
+            [
+            {
+                "section_id": "Pure number only, e.g., 4 or 5ka",
+                "title": "Full title of the Section in Nepali",
+                "symbol_found": "The marker found next to the number (e.g., ρ, Σ, or 7)",
+                "amendment_history": "The specific text from the footnote legend matching the symbol",
+                "content": {
+                "full_text": "The main text of the section",
+                "sub_sections": [
+                    {
+                    "number": "(1)",
+                    "text": "Text of sub-section",
+                    "sub_symbol": "If a specific sub-section has its own marker",
+                    "sub_amendment": "Amendment history for this specific sub-section"
+                    }
+                ]
+                },
+                "page_ref": "{start}"
+            }
+            ]
+            ```
+
     """
     
     response = model.generate_content([prompt, file_handle])

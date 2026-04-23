@@ -29,7 +29,7 @@ def accumulate_tokens(res, current_usage):
 # Database and LLM Setup
 db_manager = DatabaseManager()
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-model = genai.GenerativeModel("gemini-2.0-flash") # Use 2.0 check
+model = genai.GenerativeModel("gemini-2.5-flash-lite") # Use 2.0 check
 
 # Node 1: Retriever
 def retriever_node(state: AgentState):
